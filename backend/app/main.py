@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from structlog import get_logger
 
+from app.api.routes import auth
+
 logger = get_logger()
 
 app = FastAPI(
@@ -23,6 +25,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Include routers
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
 
 @app.get("/health")
 async def health() -> dict[str, str]:
