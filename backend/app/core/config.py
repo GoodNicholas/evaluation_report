@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Any, List, AnyHttpUrl, PostgresDsn, RedisDsn, Union
+from typing import Any, List, Union
 
 from pydantic import AnyHttpUrl, PostgresDsn, RedisDsn, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
