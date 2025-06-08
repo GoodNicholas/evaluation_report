@@ -15,7 +15,7 @@ from app.core.config import get_settings
 from app.models.course import Course, Enrolment, EnrolmentStatus
 from app.models.material import Material
 from app.models.user import User
-from app.schemas.course import CourseCreate
+from app.schemas.course import CourseCreate, CourseUpdate
 
 settings = get_settings()
 
@@ -46,6 +46,8 @@ async def create_course(
     await db.commit()
     await db.refresh(course)
     return course
+
+
 
 async def get_course(
     db: AsyncSession,
@@ -227,4 +229,35 @@ async def list_materials(
     # Get next cursor
     next_cursor = str(materials[-1].id) if materials and has_more else None
 
-    return materials, next_cursor, has_more 
+    return materials, next_cursor, has_more
+
+
+async def update_course(
+    db: AsyncSession,
+    current_user: User,
+    course_id: int,
+    course_in: CourseUpdate,
+) -> Course:
+    """Update course details."""
+    result = await db.execute(select(Course).where(Course.id == course_id))
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found",
+        )
+
+    if course.owner_id != current_user.id and not any(
+        r.name == "teacher" for r in current_user.roles
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not enough permissions",
+        )
+
+    for field, value in course_in.model_dump(exclude_unset=True).items():
+        setattr(course, field, value)
+
+    await db.commit()
+    await db.refresh(course)
+    return course
