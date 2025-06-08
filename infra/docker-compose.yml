@@ -49,6 +49,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - app-network
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
 
 volumes:
   db_data:

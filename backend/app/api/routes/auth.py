@@ -74,11 +74,15 @@ async def register(
 
 @router.post("/login", response_model=Token)
 async def login(
+    *,
     db: Annotated[AsyncSession, Depends(get_db)],
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
 ) -> Token:
-    """Login user."""
-    result = await db.execute(select(User).where(User.email == form_data.username))
+    """Login user and return access token."""
+    # Get user
+    result = await db.execute(
+        select(User).where(User.email == form_data.username)
+    )
     user = result.scalar_one_or_none()
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(
@@ -86,62 +90,75 @@ async def login(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user",
-        )
+
+    # Create access token
+    access_token = create_access_token(
+        data={"sub": user.email, "roles": [r.name for r in user.roles]}
+    )
 
     # Create refresh token
     refresh_token = RefreshToken(
         user_id=user.id,
-        token=create_refresh_token(user.id),
-        expires_at=datetime.utcnow() + timedelta(days=7),
+        expires_at=datetime.utcnow() + timedelta(days=30),
     )
     db.add(refresh_token)
     await db.commit()
+    await db.refresh(refresh_token)
 
     return Token(
-        access_token=create_access_token(user.id),
+        access_token=access_token,
         refresh_token=refresh_token.token,
+        token_type="bearer",
     )
+
+
+@router.post("/logout")
+async def logout(
+    *,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, str]:
+    """Logout user and revoke refresh token."""
+    # Revoke all refresh tokens for the user
+    result = await db.execute(
+        select(RefreshToken).where(
+            RefreshToken.user_id == current_user.id,
+            RefreshToken.revoked_at.is_(None),
+        )
+    )
+    tokens = result.scalars().all()
+    for token in tokens:
+        token.revoked_at = datetime.utcnow()
+    await db.commit()
+
+    return {"message": "Successfully logged out"}
 
 
 @router.post("/refresh", response_model=Token)
-async def refresh(
+async def refresh_token(
+    *,
     db: Annotated[AsyncSession, Depends(get_db)],
-    refresh_token: str,
+    current_user: Annotated[User, Depends(get_current_user)],
 ) -> Token:
     """Refresh access token."""
-    result = await db.execute(
-        select(RefreshToken).where(
-            RefreshToken.token == refresh_token,
-            RefreshToken.revoked == False,  # noqa: E712
-            RefreshToken.expires_at > datetime.utcnow(),
-        )
+    # Create new access token
+    access_token = create_access_token(
+        data={"sub": current_user.email, "roles": [r.name for r in current_user.roles]}
     )
-    token = result.scalar_one_or_none()
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired refresh token",
-        )
 
     # Create new refresh token
-    new_refresh_token = RefreshToken(
-        user_id=token.user_id,
-        token=create_refresh_token(token.user_id),
-        expires_at=datetime.utcnow() + timedelta(days=7),
+    refresh_token = RefreshToken(
+        user_id=current_user.id,
+        expires_at=datetime.utcnow() + timedelta(days=30),
     )
-    db.add(new_refresh_token)
-
-    # Revoke old token
-    token.revoked = True
+    db.add(refresh_token)
     await db.commit()
+    await db.refresh(refresh_token)
 
     return Token(
-        access_token=create_access_token(token.user_id),
-        refresh_token=new_refresh_token.token,
+        access_token=access_token,
+        refresh_token=refresh_token.token,
+        token_type="bearer",
     )
 
 
