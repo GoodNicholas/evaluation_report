@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MaterialBase(BaseModel):
@@ -11,6 +12,7 @@ class MaterialBase(BaseModel):
     filename: str
     mime_type: str
     size: int
+    sha256: str
 
 
 class MaterialCreate(MaterialBase):
@@ -26,12 +28,18 @@ class Material(MaterialBase):
     course_id: int
     uploader_id: int
     stored_path: str
-    sha256: str
+    download_url: Optional[str] = None
     created_at: datetime
     updated_at: datetime
-    download_url: str | None = None
 
     class Config:
         """Pydantic config."""
 
-        from_attributes = True 
+        from_attributes = True
+
+
+class MaterialList(BaseModel):
+    """Material list with pagination."""
+    items: list[Material]
+    next_cursor: Optional[str] = None
+    has_more: bool = False 

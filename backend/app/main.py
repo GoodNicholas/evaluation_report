@@ -5,11 +5,42 @@ from typing import Annotated
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from structlog import get_logger
+import structlog
+from structlog.stdlib import ProcessorFormatter
+import logging
+import sys
 
 from app.api.routes import auth
+from app.core.config import settings
 
-logger = get_logger()
+# Configure structlog
+structlog.configure(
+    processors=[
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+# Configure standard library logging
+logging.basicConfig(
+    format="%(message)s",
+    stream=sys.stdout,
+    level=settings.LOG_LEVEL,
+    force=True,
+)
+
+logger = structlog.get_logger()
 
 app = FastAPI(
     title="Evaluation Report API",

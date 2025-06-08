@@ -228,4 +228,73 @@ async def test_list_materials(
     )
     assert response.status_code == 200
     data = response.json()
-    assert isinstance(data, list) 
+    assert isinstance(data, list)
+
+
+@pytest.mark.asyncio
+async def test_rbac_admin_access(
+    async_client: AsyncClient,
+    db: AsyncSession,
+) -> None:
+    """Test RBAC: student cannot access admin endpoints."""
+    # Create student
+    student = User(
+        email="student@example.com",
+        first_name="Test",
+        last_name="Student",
+        password_hash=get_password_hash("password123"),
+    )
+    db.add(student)
+    await db.commit()
+
+    # Login as student
+    login_response = await async_client.post(
+        "/auth/login",
+        data={"username": "student@example.com", "password": "password123"},
+    )
+    access_token = login_response.json()["access_token"]
+
+    # Try to access admin endpoint
+    response = await async_client.get(
+        "/admin/users",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_refresh_token_revocation(
+    async_client: AsyncClient,
+    db: AsyncSession,
+) -> None:
+    """Test that a revoked refresh token cannot be used."""
+    # Create user
+    user = User(
+        email="test@example.com",
+        first_name="Test",
+        last_name="User",
+        password_hash=get_password_hash("password123"),
+    )
+    db.add(user)
+    await db.commit()
+
+    # Login to get refresh token
+    login_response = await async_client.post(
+        "/auth/login",
+        data={"username": "test@example.com", "password": "password123"},
+    )
+    refresh_token = login_response.json()["refresh_token"]
+
+    # Revoke refresh token
+    response = await async_client.post(
+        "/auth/logout",
+        headers={"Authorization": f"Bearer {refresh_token}"},
+    )
+    assert response.status_code == 200
+
+    # Try to use revoked refresh token
+    response = await async_client.post(
+        "/auth/refresh",
+        headers={"Authorization": f"Bearer {refresh_token}"},
+    )
+    assert response.status_code == 401 
