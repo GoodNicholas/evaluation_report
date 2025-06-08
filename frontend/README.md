@@ -27,3 +27,8 @@ npm run dev
 ```sh
 npm run build
 ```
+
+### Telegram API
+
+- `POST /auth/telegram/bind-token` — generate a Telegram binding token.
+- `POST /auth/telegram/bind` — bind a Telegram account using the token.
