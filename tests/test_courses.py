@@ -297,4 +297,101 @@ async def test_refresh_token_revocation(
         "/auth/refresh",
         headers={"Authorization": f"Bearer {refresh_token}"},
     )
-    assert response.status_code == 401 
+    assert response.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_update_course(async_client: AsyncClient, db: AsyncSession) -> None:
+    """Test updating a course."""
+    teacher_role = Role(name="teacher")
+    db.add(teacher_role)
+    teacher = User(
+        email="teacher@example.com",
+        first_name="Test",
+        last_name="Teacher",
+        password_hash=get_password_hash("password123"),
+    )
+    teacher.roles.append(teacher_role)
+    db.add(teacher)
+    await db.commit()
+
+    course = Course(
+        title="Old Course",
+        code="OLD101",
+        description="Old description",
+        owner_id=teacher.id,
+    )
+    db.add(course)
+    await db.commit()
+
+    login_response = await async_client.post(
+        "/auth/login",
+        data={"username": "teacher@example.com", "password": "password123"},
+    )
+    access_token = login_response.json()["access_token"]
+
+    update_data = {
+        "title": "New Course",
+        "code": "NEW101",
+        "description": "New description",
+    }
+    response = await async_client.patch(
+        f"/courses/{course.id}",
+        json=update_data,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == update_data["title"]
+    assert data["code"] == update_data["code"]
+    assert data["description"] == update_data["description"]
+
+
+@pytest.mark.asyncio
+async def test_update_course_forbidden(
+    async_client: AsyncClient, db: AsyncSession
+) -> None:
+    """Test that student cannot update a course."""
+    teacher_role = Role(name="teacher")
+    db.add(teacher_role)
+    teacher = User(
+        email="teacher@example.com",
+        first_name="Test",
+        last_name="Teacher",
+        password_hash=get_password_hash("password123"),
+    )
+    teacher.roles.append(teacher_role)
+    db.add(teacher)
+    await db.commit()
+
+    course = Course(
+        title="Old Course",
+        code="OLD101",
+        description="Old description",
+        owner_id=teacher.id,
+    )
+    db.add(course)
+    await db.commit()
+
+    student = User(
+        email="student@example.com",
+        first_name="Test",
+        last_name="Student",
+        password_hash=get_password_hash("password123"),
+    )
+    db.add(student)
+    await db.commit()
+
+    login_response = await async_client.post(
+        "/auth/login",
+        data={"username": "student@example.com", "password": "password123"},
+    )
+    access_token = login_response.json()["access_token"]
+
+    update_data = {"title": "New"}
+    response = await async_client.patch(
+        f"/courses/{course.id}",
+        json=update_data,
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+    assert response.status_code == 403

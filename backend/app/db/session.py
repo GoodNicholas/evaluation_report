@@ -26,6 +26,9 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
+# Temporary alias for backward compatibility
+SessionLocal = AsyncSessionLocal
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """Get database session."""

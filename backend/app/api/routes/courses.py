@@ -19,7 +19,7 @@ from app.models.course import Course, Enrolment, EnrolmentStatus
 from app.models.material import Material
 from app.models.user import User
 from app.schemas.course import Course as CourseSchema
-from app.schemas.course import CourseCreate, Enrolment as EnrolmentSchema
+from app.schemas.course import CourseCreate, CourseUpdate, Enrolment as EnrolmentSchema
 from app.schemas.material import Material as MaterialSchema, MaterialList
 from app.services import courses
 
@@ -93,4 +93,16 @@ async def list_materials(
         items=materials,
         next_cursor=next_cursor,
         has_more=has_more
-    ) 
+    )
+
+
+@router.patch("/{course_id}", response_model=CourseSchema)
+async def update_course(
+    *,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    course_id: int,
+    course_in: CourseUpdate,
+) -> CourseSchema:
+    """Update course."""
+    return await courses.update_course(db, current_user, course_id, course_in)
